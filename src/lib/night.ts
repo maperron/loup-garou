@@ -18,29 +18,31 @@ export async function startNight(
   players: Player[],
   priorChat: ChatMessage[],
   round: number,
-  onMessage?: MessageCallback // optional streaming callback
-): Promise<{ updatedPlayers: Player[]; nightChat: ChatMessage[] }> {
+  onMessage?: MessageCallback
+): Promise<{ updatedPlayers: Player[] }> {
   const playersCopy = players.map((p) => ({ ...p }));
   const wolves = playersCopy.filter((p) => p.alive && p.role === "werewolf");
   const villagers = playersCopy.filter((p) => p.alive && p.role !== "werewolf");
 
-  const wolfChat: ChatMessage[] = [];
-  const nightChat: ChatMessage[] = [...priorChat, { id: 0, name: "Narrator", text: `Night ${round} falls. Werewolves whisper.` }];
-  if (onMessage) onMessage(nightChat[nightChat.length - 1]);
+  const wolfChat: ChatMessage[] = []; // private wolf whispers
+
+  // Narrator message visible to all
+  const narratorStart: ChatMessage = { id: 0, name: "Narrator", text: `Night ${round} falls.` };
+  if (onMessage) onMessage(narratorStart);
 
   let chosen: Player | null = null;
 
-  // true back-and-forth
   const maxRounds = 4;
   for (let r = 0; r < maxRounds && !chosen; r++) {
     for (const wolf of wolves) {
       const reply = await werewolfSpeak(wolf, wolfChat, playersCopy);
-      wolfChat.push({ id: wolf.id, name: wolf.name, text: reply });
-      const entry = { id: wolf.id, name: `${wolf.name} (wolf whisper)`, text: reply };
-      nightChat.push(entry);
-      if (onMessage) onMessage(entry);
 
-      // check consensus
+      // Append to private wolf chat
+      const whisperMsg: ChatMessage = { id: wolf.id, name: `${wolf.name} (wolf whisper)`, text: reply };
+      wolfChat.push({ id: wolf.id, name: wolf.name, text: reply });
+      if (onMessage) onMessage(whisperMsg);
+
+      // Determine target
       for (const v of villagers) {
         const mentions = wolfChat.filter((m) => m.text.toLowerCase().includes(v.name.toLowerCase()));
         const mentioners = new Set(mentions.map((m) => m.name));
@@ -55,17 +57,18 @@ export async function startNight(
 
   if (!chosen && villagers.length > 0) {
     chosen = villagers[Math.floor(Math.random() * villagers.length)];
-    const narrator = { id: 0, name: "Narrator", text: `Werewolves could not agree. They pick ${chosen.name}.` };
-    nightChat.push(narrator);
-    if (onMessage) onMessage(narrator);
+    const narratorFail: ChatMessage = { id: 0, name: "Narrator", text: `Werewolves could not agree. They pick ${chosen.name}.` };
+    if (onMessage) onMessage(narratorFail);
   }
 
   if (chosen) {
+    // Apply death
     for (const p of playersCopy) if (p.name === chosen!.name) p.alive = false;
-    const narrator2 = { id: 0, name: "Narrator", text: `${chosen.name} was killed during the night!` };
-    nightChat.push(narrator2);
-    if (onMessage) onMessage(narrator2);
+    const narratorDeath: ChatMessage = { id: 0, name: "Narrator", text: `${chosen.name} was killed during the night!` };
+    if (onMessage) onMessage(narratorDeath);
   }
 
-  return { updatedPlayers: playersCopy, nightChat };
+  return { updatedPlayers: playersCopy };
 }
+
+

@@ -8,6 +8,7 @@ import { startDay } from "../lib/day";
 export default function Page() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [wolfChat, setWolfChat] = useState<ChatMessage[]>([]);
   const [round, setRound] = useState(1);
   const [phase, setPhase] = useState<"day" | "night">("night");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -21,26 +22,35 @@ export default function Page() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat]);
 
+  // ------------------- NIGHT -------------------
   const handleNight = async () => {
-    const { updatedPlayers, nightChat } = await startNight(players, chat, round);
-    setPlayers(updatedPlayers);
-    setChat(nightChat);
+    const { updatedPlayers } = await startNight(players, chat, round, (msg) => {
+      if (msg.name.includes("(wolf whisper)")) {
+        setWolfChat((prev) => [...prev, msg]);
+      } else {
+        setChat((prev) => [...prev, msg]);
+      }
+    });
+
+    setPlayers(updatedPlayers); // apply deaths
     setPhase("day");
   };
 
+  // ------------------- DAY -------------------
   const handleDay = async () => {
-    const { updatedPlayers, updatedChat } = await startDay(players, chat, round);
+    const { updatedPlayers } = await startDay(players, chat, round, (msg) => {
+      setChat((prev) => [...prev, msg]);
+    });
+
     setPlayers(updatedPlayers);
-    setChat(updatedChat);
     setPhase("night");
     setRound((r) => r + 1);
   };
 
   return (
     <main className="flex flex-col md:flex-row h-screen bg-gray-900 text-white font-sans">
-      {/* Chat area */}
+      {/* Chat + Controls */}
       <section className="flex-1 flex flex-col border-r border-gray-700">
-        {/* Header */}
         <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
           <h1 className="text-xl font-bold">🧑‍🤝‍🧑 Werewolf Game</h1>
           <span className="text-sm text-gray-300">
@@ -90,9 +100,7 @@ export default function Page() {
 
       {/* Players sidebar */}
       <aside className="w-full md:w-64 bg-gray-800 flex flex-col">
-        <div className="p-4 border-b border-gray-700 text-lg font-semibold">
-          Players
-        </div>
+        <div className="p-4 border-b border-gray-700 text-lg font-semibold">Players</div>
         <ul className="flex-1 overflow-y-auto divide-y divide-gray-700">
           {players.map((p) => (
             <li
@@ -109,6 +117,20 @@ export default function Page() {
               >
                 {p.alive ? "Alive" : "Dead"}
               </span>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      {/* Werewolf sidebar */}
+      <aside className="w-full md:w-64 bg-gray-800 flex flex-col">
+        <div className="p-4 border-b border-gray-700 text-lg font-semibold">
+          Werewolf Chat
+        </div>
+        <ul className="flex-1 overflow-y-auto divide-y divide-gray-700">
+          {wolfChat.map((m, idx) => (
+            <li key={idx} className="p-3">
+              <span className="font-bold text-red-400">{m.name}:</span> {m.text}
             </li>
           ))}
         </ul>
