@@ -1,81 +1,118 @@
-// src/app/page.tsx
 "use client";
 
-import React, { useState } from "react";
-import { Player, ChatMessage, initializePlayers } from "../lib/GameLogic";
-import { startDay } from "../lib/DayLogic";
-import { startNight } from "../lib/NightLogic";
+import { useEffect, useState, useRef } from "react";
+import { initializePlayers, Player, ChatMessage } from "../lib/game";
+import { startNight } from "../lib/night";
+import { startDay } from "../lib/day";
 
-export default function HomePage() {
-  const [players, setPlayers] = useState<Player[]>(() => initializePlayers());
+export default function Page() {
+  const [players, setPlayers] = useState<Player[]>([]);
   const [chat, setChat] = useState<ChatMessage[]>([]);
-  const [round, setRound] = useState<number>(1);
-  const [phase, setPhase] = useState<"night" | "day">("night");
-  const [running, setRunning] = useState<boolean>(false);
+  const [round, setRound] = useState(1);
+  const [phase, setPhase] = useState<"day" | "night">("night");
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  async function nextPhase() {
-    if (running) return;
-    setRunning(true);
+  useEffect(() => {
+    setPlayers(initializePlayers());
+    setChat([{ id: 0, name: "Narrator", text: "Welcome to Havenwood. The game begins!" }]);
+  }, []);
 
-    if (phase === "night") {
-      const { updatedPlayers, nightChat } = await startNight(players, chat, round);
-      setPlayers(updatedPlayers);
-      setChat(nightChat);
-      setPhase("day");
-    } else {
-      const { updatedPlayers, updatedChat } = await startDay(players, chat, round);
-      setPlayers(updatedPlayers);
-      setChat(updatedChat);
-      setPhase("night");
-      setRound((r) => r + 1);
-    }
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chat]);
 
-    setRunning(false);
-  }
+  const handleNight = async () => {
+    const { updatedPlayers, nightChat } = await startNight(players, chat, round);
+    setPlayers(updatedPlayers);
+    setChat(nightChat);
+    setPhase("day");
+  };
+
+  const handleDay = async () => {
+    const { updatedPlayers, updatedChat } = await startDay(players, chat, round);
+    setPlayers(updatedPlayers);
+    setChat(updatedChat);
+    setPhase("night");
+    setRound((r) => r + 1);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6">
-      <h1 className="text-3xl font-bold mb-4">Loup Garou — Havenwood</h1>
+    <main className="flex flex-col md:flex-row h-screen bg-gray-900 text-white font-sans">
+      {/* Chat area */}
+      <section className="flex-1 flex flex-col border-r border-gray-700">
+        {/* Header */}
+        <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+          <h1 className="text-xl font-bold">🧑‍🤝‍🧑 Werewolf Game</h1>
+          <span className="text-sm text-gray-300">
+            {phase === "day" ? `☀️ Day ${round}` : `🌙 Night ${round}`}
+          </span>
+        </div>
 
-      <div className="mb-4 flex gap-2">
-        <button
-          onClick={nextPhase}
-          disabled={running}
-          className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
-        >
-          {running ? "Running..." : `Next (${phase === "night" ? "Night" : "Day"})`}
-        </button>
-      </div>
+        {/* Chat log */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {chat.map((m, idx) => (
+            <div
+              key={idx}
+              className={`${
+                m.name === "Narrator"
+                  ? "text-gray-400 italic"
+                  : "bg-gray-800 p-2 rounded-lg shadow"
+              }`}
+            >
+              {m.name !== "Narrator" && (
+                <span className="font-bold text-blue-400 mr-2">{m.name}:</span>
+              )}
+              <span>{m.text}</span>
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
 
-      <div className="grid grid-cols-2 gap-6 w-full max-w-5xl">
-        <div className="bg-white shadow rounded p-4">
-          <h2 className="text-xl font-semibold mb-2">Players</h2>
-          <ul className="space-y-1">
-            {players.map((p) => (
-              <li
-                key={p.id}
-                className={`flex justify-between px-2 py-1 rounded ${
-                  p.alive ? "bg-green-100" : "bg-red-200"
+        {/* Controls */}
+        <div className="p-4 bg-gray-800 border-t border-gray-700 flex gap-3 justify-center">
+          {phase === "night" ? (
+            <button
+              onClick={handleNight}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg shadow"
+            >
+              Start Night
+            </button>
+          ) : (
+            <button
+              onClick={handleDay}
+              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg shadow"
+            >
+              Start Day
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Players sidebar */}
+      <aside className="w-full md:w-64 bg-gray-800 flex flex-col">
+        <div className="p-4 border-b border-gray-700 text-lg font-semibold">
+          Players
+        </div>
+        <ul className="flex-1 overflow-y-auto divide-y divide-gray-700">
+          {players.map((p) => (
+            <li
+              key={p.id}
+              className="flex justify-between items-center p-3 hover:bg-gray-700"
+            >
+              <span>{p.name}</span>
+              <span
+                className={`text-xs px-2 py-1 rounded ${
+                  p.alive
+                    ? "bg-green-600 text-white"
+                    : "bg-red-600 text-white line-through"
                 }`}
               >
-                <span>{p.name}</span>
-                <span className="text-sm">{p.alive ? "Alive" : "Dead"}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="bg-white shadow rounded p-4">
-          <h2 className="text-xl font-semibold mb-2">Chat</h2>
-          <div className="h-[70vh] overflow-y-auto space-y-2">
-            {chat.map((m, idx) => (
-              <div key={idx} className="p-2 rounded bg-gray-50">
-                <strong>{m.name}:</strong> {m.text}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+                {p.alive ? "Alive" : "Dead"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    </main>
   );
 }
